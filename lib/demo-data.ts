@@ -1,0 +1,8 @@
+export type DemoPaper={id:number;title:string;abstract:string;year:number;venue:string;citations:number;authors:string[];topics:string[];score?:number};
+export const demoPapers:DemoPaper[]=[
+ {id:1,title:"Demo: Retrieval-Augmented Review Assistant",abstract:"A labelled demonstration record for semantic literature discovery. It retrieves relevant paper chunks and presents citations for review.",year:2024,venue:"Demo Systems Workshop",citations:42,authors:["A. Rao","M. Chen"],topics:["RAG","Information Retrieval","NLP"]},
+ {id:2,title:"Demo: Efficient Transformer Comparison",abstract:"A synthetic benchmark record comparing attention variants using a repeatable evaluation schema, not a claimed research result.",year:2023,venue:"Demo ML Conference",citations:31,authors:["J. Singh"],topics:["Transformers","Efficiency"]},
+ {id:3,title:"Demo: Responsible Dataset Documentation",abstract:"A fictional case study showing how dataset provenance, limitations, and access rules can be modelled in a research catalogue.",year:2024,venue:"Demo Data Forum",citations:18,authors:["S. Iyer","P. Das"],topics:["Responsible AI","Datasets"]},
+ {id:4,title:"Demo: Multimodal Evidence Graphs",abstract:"A labelled demo paper about connecting methods, datasets and claims as queryable relationships for research navigation.",year:2022,venue:"Demo Vision Symposium",citations:56,authors:["K. Lee"],topics:["Multimodal","Knowledge Graphs"]}
+];
+export const demoAnalytics={years:[{year:2022,count:1},{year:2023,count:1},{year:2024,count:2}],topics:[{name:"RAG",count:1},{name:"Transformers",count:1},{name:"Responsible AI",count:1},{name:"Multimodal",count:1}]};
