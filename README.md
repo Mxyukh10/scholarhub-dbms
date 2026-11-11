@@ -21,6 +21,8 @@ All visible records are explicitly labelled fictional demo data. The fallback se
 4. Run `npm install`, then `npm run dev`; visit `http://localhost:3000`.
 5. To see API validation, sign in at `/login` then POST a paper JSON object to `/api/papers`. With no `DATABASE_URL`, the endpoint validates and returns a clearly marked non-persistent demo result.
 
+6. `/api/search?q=...` has three modes: pgvector similarity (when a valid 768-dim `vector` parameter is supplied), PostgreSQL full-text search (database mode without a vector), and a lexical demo fallback (no database). `POST /api/auth/logout` clears the session cookie. `AUTH_SECRET` is mandatory in production.
+
 ## Data and retrieval approach
 
 For a verified paper, split the abstract/full text into numbered chunks, generate embeddings using one declared model, store them in `paper_chunks.embedding`, and record `embedding_model`. A query follows the same embedding process, then uses `embedding <=> query_vector` (cosine distance). The query in `db/03_queries.sql` returns the nearest chunks. This preserves the relational source of truth while adding concept search that keyword matching misses.

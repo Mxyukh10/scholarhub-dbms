@@ -1,5 +1,5 @@
 -- DML uses labelled demo records only.
-BEGIN; SELECT fn_upsert_paper_with_topics('Demo: Retrieval-Augmented Review Assistant','A labelled demonstration record for semantic literature discovery with citations.',2024,'Demo Systems Workshop',ARRAY['RAG','Information Retrieval'],1); COMMIT;
+BEGIN; SELECT fn_upsert_paper_with_topics('Demo: Retrieval-Augmented Review Assistant','A labelled demonstration record for semantic literature discovery with citations.',2024,'Demo Systems Workshop',ARRAY['RAG','Information Retrieval'],NULL); COMMIT; -- actor is NULL because the seed creates no users (uploaded_by is nullable)
 -- JOIN + GROUP BY + HAVING
 SELECT t.name,COUNT(*) paper_count FROM topics t JOIN paper_topics pt USING(topic_id) JOIN papers p USING(paper_id) WHERE p.status='PUBLISHED' GROUP BY t.topic_id,t.name HAVING COUNT(*)>=2 ORDER BY paper_count DESC;
 -- correlated query
