@@ -1,0 +1,2 @@
+-- Canonical ScholarHub schema is db/scholarhub_schema.sql.
+-- Run that file (not this compatibility pointer) to initialize the application database.

@@ -1,0 +1,2 @@
+-- Advanced functions, views and triggers are included in db/scholarhub_schema.sql.
+-- This compatibility pointer is intentionally empty to avoid creating a conflicting schema.

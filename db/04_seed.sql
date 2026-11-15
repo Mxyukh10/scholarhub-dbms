@@ -1,0 +1,2 @@
+-- Demo users, venues and starter keywords are seeded automatically by db/scholarhub_schema.sql.
+-- This file is intentionally empty to prevent duplicate seed data.
