@@ -1,66 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { paperInput } from "@/lib/validation";
-import { database } from "@/lib/db";
-import { currentRole } from "@/lib/auth";
-
-export async function POST(req: NextRequest) {
-  if (!(await currentRole())) {
-    return NextResponse.json({ error: "Sign in as ADMIN or RESEARCHER first." }, { status: 401 });
-  }
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
-  }
-
-  const parsed = paperInput.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const db = database();
-  if (!db) {
-    return NextResponse.json(
-      { message: "Validated in demo mode. Configure DATABASE_URL to persist this paper." },
-      { status: 202 }
-    );
-  }
-
-  const p = parsed.data;
-  const c = await db.connect();
-  try {
-    await c.query("BEGIN");
-    const venue = await c.query(
-      "INSERT INTO venues(name) VALUES($1) ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING venue_id",
-      [p.venue]
-    );
-    const paper = await c.query(
-      "INSERT INTO papers(title,abstract,year,venue_id,doi,status) VALUES($1,$2,$3,$4,$5,'PUBLISHED') RETURNING paper_id",
-      [p.title, p.abstract, p.year, venue.rows[0].venue_id, p.doi || null]
-    );
-    for (const name of new Set(p.topics)) {
-      const topic = await c.query(
-        "INSERT INTO topics(name) VALUES($1) ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING topic_id",
-        [name]
-      );
-      await c.query(
-        "INSERT INTO paper_topics(paper_id,topic_id) VALUES($1,$2) ON CONFLICT DO NOTHING",
-        [paper.rows[0].paper_id, topic.rows[0].topic_id]
-      );
-    }
-    await c.query("COMMIT");
-    return NextResponse.json({ id: paper.rows[0].paper_id }, { status: 201 });
-  } catch (err) {
-    await c.query("ROLLBACK").catch(() => {});
-    // 23505 = unique_violation (duplicate title or DOI)
-    if ((err as { code?: string })?.code === "23505") {
-      return NextResponse.json({ error: "A paper with this title or DOI already exists." }, { status: 409 });
-    }
-    console.error("POST /api/papers failed:", err);
-    return NextResponse.json({ error: "Unable to save paper" }, { status: 500 });
-  } finally {
-    c.release();
-  }
+import {NextRequest,NextResponse} from "next/server";
+import {database} from "@/lib/db"; import {currentSession} from "@/lib/auth";
+export async function GET(){
+ const db=database(); if(!db)return NextResponse.json({error:"Database is not configured."},{status:503});
+ try {const {rows}=await db.query(`SELECT p.paper_id,p.title,p.abstract,p.status,p.submitted_at,u.name AS author,v.name AS venue,
+ COALESCE(array_agg(DISTINCT k.keyword_text) FILTER(WHERE k.keyword_text IS NOT NULL),'{}') AS keywords,
+ (SELECT COUNT(*) FROM review_assignments ra WHERE ra.paper_id=p.paper_id) AS reviewer_count,
+ (SELECT COUNT(*) FROM reviews r JOIN review_assignments ra ON ra.assignment_id=r.assignment_id WHERE ra.paper_id=p.paper_id) AS completed_reviews
+ FROM papers p JOIN users u ON u.user_id=p.primary_author_id LEFT JOIN venues v ON v.venue_id=p.venue_id
+ LEFT JOIN paper_keywords pk ON pk.paper_id=p.paper_id LEFT JOIN keywords k ON k.keyword_id=pk.keyword_id
+ GROUP BY p.paper_id,u.name,v.name ORDER BY p.submitted_at DESC`); return NextResponse.json({papers:rows});}
+ catch(e){console.error(e);return NextResponse.json({error:"Could not load papers."},{status:500});}
+}
+export async function POST(req:NextRequest){
+ const s=await currentSession(); if(!s||!(["AUTHOR","ADMIN"] as string[]).includes(s.role))return NextResponse.json({error:"Only authors and admins can submit papers."},{status:403});
+ const body=await req.json().catch(()=>null); if(!body)return NextResponse.json({error:"Invalid JSON."},{status:400});
+ const title=String(body.title||"").trim(),abstract=String(body.abstract||"").trim(),venue=String(body.venue||"").trim();
+ const keywords=Array.isArray(body.keywords)?body.keywords.map((x:unknown)=>String(x).trim()).filter(Boolean).slice(0,8):[];
+ if(title.length<10||abstract.length<40||!venue||!keywords.length)return NextResponse.json({error:"Enter a title (10+ chars), abstract (40+ chars), venue and at least one keyword."},{status:400});
+ const db=database();if(!db)return NextResponse.json({error:"PostgreSQL is not connected."},{status:503});
+ const c=await db.connect();try{await c.query("BEGIN");await c.query("SELECT set_config('app.user_id',$1,true)",[String(s.userId)]);const result=await c.query("SELECT submit_paper_with_reviewers($1,$2,$3,$4,$5,$6::text[],$7::integer[]) AS paper_id",[title,abstract,s.userId,venue,"CONFERENCE",keywords,[]]);await c.query("COMMIT");return NextResponse.json({ok:true,paperId:result.rows[0].paper_id},{status:201});}
+ catch(e){await c.query("ROLLBACK").catch(()=>{});console.error(e);return NextResponse.json({error:(e as {code?:string}).code==="23505"?"A paper with this title already exists.":"Could not submit paper. Check the fields and database."},{status:500});}finally{c.release();}
 }

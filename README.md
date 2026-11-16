@@ -1,40 +1,103 @@
-# PaperLens
+# ScholarHub — Research Paper Repository & Peer-Review Management
 
-PaperLens is a DBMS Level 3 mini-project: an AI Research Paper Analysis and Discovery platform. It deliberately goes beyond CRUD by connecting structured scholarly metadata with semantic retrieval over document chunks.
+A Next.js + PostgreSQL DBMS mini-project implementing three roles: **Admin, Author and Reviewer**. The main SQL schema is `db/scholarhub_schema.sql`; it is the single schema used by the application.
 
-## What is implemented
+## Features
 
-- Next.js user interface with paper catalogue, paper detail/comparison context, analytics, semantic-search endpoint, and demo fallback.
-- PostgreSQL relational model for users, papers, authors, venues, topics, many-to-many authorship/topics, paper relationships and audit records.
-- pgvector model for chunks and 768-dimension embeddings using cosine similarity and an HNSW index.
-- Two roles: `ADMIN` and `RESEARCHER`. The included local sign-in issues an HTTP-only signed session. Database users store `password_hash`, never plaintext passwords.
-- Validation in browser/API (`zod`) and database constraints. Parameterized queries protect against injection.
-- Advanced DB features: HNSW/vector index and full-text index, analytics view, transactional paper ingestion, PL/pgSQL stored function, and audit trigger.
+- Role-based sign-in (Admin, Author, Reviewer)
+- Author paper submission with keywords and venue
+- Admin reviewer assignment and reviewer directory
+- Reviewer assignment inbox and scored review submission
+- Automatic review completion and a simple final decision rule (average score >= 7 accepts; below 7 rejects)
+- PostgreSQL full-text search (generated `tsvector` + GIN index)
+- pgvector `VECTOR(384)` storage and IVFFlat cosine index for future semantic embedding integration
+- Views: `accepted_papers`, `pending_review_summary`, `reviewer_workload`
+- Stored functions: `avg_review_score`, `submit_paper_with_reviewers`
+- Triggers: paper status audit and automatic paper decision after all assigned reviews complete
+- Foreign keys, unique constraints, CHECK constraints, and parameterized SQL queries
 
-All visible records are explicitly labelled fictional demo data. The fallback search is lexical scoring, not AI. Real semantic search requires an embedding provider to convert the incoming text to the same 768-dimension model used for stored chunks; this repository does not pretend to call one without configuration.
+## Requirements
 
-## Setup
+- Node.js 20 or newer
+- Docker Desktop (recommended) with Docker Compose
+- Git (optional, for GitHub)
 
-1. Install Node 20+ and PostgreSQL 16+ with the `pgvector` extension.
-2. Copy `.env.example` to `.env.local`, set a long `AUTH_SECRET` and two demo passwords. Never commit `.env.local`.
-3. Create a database and execute, in order: `db/01_schema.sql`, `db/02_advanced.sql`, `db/04_seed.sql`. `db/03_queries.sql` contains demonstration queries to run separately.
-4. Run `npm install`, then `npm run dev`; visit `http://localhost:3000`.
-5. To see API validation, sign in at `/login` then POST a paper JSON object to `/api/papers`. With no `DATABASE_URL`, the endpoint validates and returns a clearly marked non-persistent demo result.
+## Quick setup on Windows
 
-6. `/api/search?q=...` has three modes: pgvector similarity (when a valid 768-dim `vector` parameter is supplied), PostgreSQL full-text search (database mode without a vector), and a lexical demo fallback (no database). `POST /api/auth/logout` clears the session cookie. `AUTH_SECRET` is mandatory in production.
+1. Install and open **Docker Desktop**.
+2. Open this project folder in VS Code.
+3. In a terminal at the project root, start PostgreSQL:
 
-## Data and retrieval approach
+   ```powershell
+   docker compose up -d
+   ```
 
-For a verified paper, split the abstract/full text into numbered chunks, generate embeddings using one declared model, store them in `paper_chunks.embedding`, and record `embedding_model`. A query follows the same embedding process, then uses `embedding <=> query_vector` (cosine distance). The query in `db/03_queries.sql` returns the nearest chunks. This preserves the relational source of truth while adding concept search that keyword matching misses.
+   The container uses the `pgvector/pgvector:pg16` image. It creates database `scholarhub`, user `scholarhub`, password `scholarhub_local_pw`, and runs `db/scholarhub_schema.sql` automatically on the first start.
 
-## Database design at a glance
+4. Create your local environment file:
 
-`users -> papers -> paper_chunks`; `papers <-> authors` through `paper_authors`; `papers <-> topics` through `paper_topics`; `papers -> venues`; and `papers <-> papers` through `paper_relationships`. `audit_log` records paper mutations.
+   ```powershell
+   Copy-Item .env.example .env.local
+   ```
 
-## Test and demonstration checklist
+   Keep `.env.local` private; it is ignored by Git. For a classroom demo, the sample role passwords are:
 
-Run `npm test` for basic checks and `npm run build` before demo day. In PostgreSQL, demonstrate invalid year/abstract rejection, duplicate title rejection, `fn_upsert_paper_with_topics` inside a transaction, `v_topic_year_analytics`, trigger-generated audit rows, full-text index query, and pgvector similarity query. Capture screenshots only after replacing demo records with a small, cited set of verified papers.
+   | Role | Email shown in DB | Password |
+   |---|---|---|
+   | Admin | admin@scholarhub.local | `Admin@123` |
+   | Author | author@scholarhub.local | `Author@123` |
+   | Reviewer 1 | reviewer1@scholarhub.local | `Reviewer@123` |
+| Reviewer 2 | reviewer2@scholarhub.local | `Reviewer@123` |
 
-## Team placeholders
+   The login screen asks for a role, account email and the role password. Both reviewer accounts use the reviewer demo password. Change these before sharing the app outside your local demo.
 
-Primary student: Mayukh Pravin (PES2UG24CS271). Add the second member, guide, project approvals, actual GitHub repository URL, and individual contribution history before submission. Do not invent these details.
+5. Install dependencies and start Next.js:
+
+   ```powershell
+   npm install
+   npm run dev
+   ```
+
+6. Open http://localhost:3000.
+
+## Database management
+
+- Check the container: `docker compose ps`
+- View database logs: `docker compose logs -f db`
+- Open PostgreSQL shell: `docker exec -it scholarhub-postgres psql -U scholarhub -d scholarhub`
+- Stop database: `docker compose down`
+- Stop and DELETE local database data: `docker compose down -v` (destructive; use only to reset the demo database)
+
+The SQL initialization script runs only when the PostgreSQL data volume is first created. If you edit the schema and need a clean rebuild, run `docker compose down -v` followed by `docker compose up -d`.
+
+## Useful SQL for the project demonstration
+
+```sql
+-- All submissions and their authors
+SELECT p.paper_id,p.title,p.status,u.name AS author
+FROM papers p JOIN users u ON u.user_id=p.primary_author_id;
+
+-- Reviewer workload view
+SELECT * FROM reviewer_workload;
+
+-- Accepted papers view
+SELECT * FROM accepted_papers;
+
+-- Average review score for a paper
+SELECT avg_review_score(1);
+
+-- Full-text search (uses the GIN index)
+SELECT paper_id,title FROM papers
+WHERE search_vector @@ plainto_tsquery('english','machine learning');
+
+-- Audit trail
+SELECT * FROM audit_log ORDER BY changed_at DESC;
+```
+
+## Important notes / remaining academic work
+
+- The current login is a **local classroom demo login**: role passwords are read from `.env.local`; user roles and IDs are read from PostgreSQL. For production, replace this with per-user password hashing and account registration/reset.
+- The paper decision rule is deliberately simple for demonstration. Explain it to your instructor and change it if your team has a different decision policy.
+- The application currently provides PostgreSQL full-text search. True semantic search needs a configured embedding generator that creates 384-dimensional vectors with the same model used for query embeddings. The database extension/table/index are ready, but no embedding API or model is bundled.
+- Demo user names and venue labels are sample records. Replace them with your team's actual users and verified academic examples before final submission.
+- `db/01_schema.sql`, `db/02_advanced.sql` and `db/04_seed.sql` are compatibility pointers kept to prevent accidentally running the earlier prototype schema. Use only `db/scholarhub_schema.sql` to initialize ScholarHub; `db/03_queries.sql` contains optional demonstration queries.

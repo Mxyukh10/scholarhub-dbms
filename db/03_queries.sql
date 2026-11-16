@@ -1,10 +1,30 @@
--- DML uses labelled demo records only.
-BEGIN; SELECT fn_upsert_paper_with_topics('Demo: Retrieval-Augmented Review Assistant','A labelled demonstration record for semantic literature discovery with citations.',2024,'Demo Systems Workshop',ARRAY['RAG','Information Retrieval'],NULL); COMMIT; -- actor is NULL because the seed creates no users (uploaded_by is nullable)
--- JOIN + GROUP BY + HAVING
-SELECT t.name,COUNT(*) paper_count FROM topics t JOIN paper_topics pt USING(topic_id) JOIN papers p USING(paper_id) WHERE p.status='PUBLISHED' GROUP BY t.topic_id,t.name HAVING COUNT(*)>=2 ORDER BY paper_count DESC;
--- correlated query
-SELECT p.title,p.citation_count FROM papers p WHERE p.citation_count>(SELECT AVG(p2.citation_count) FROM papers p2 WHERE p2.venue_id=p.venue_id);
--- nested query
-SELECT DISTINCT a.full_name FROM authors a WHERE a.author_id IN (SELECT pa.author_id FROM paper_authors pa WHERE pa.paper_id IN (SELECT pt.paper_id FROM paper_topics pt JOIN topics t ON t.topic_id=pt.topic_id WHERE t.name='RAG'));
--- pgvector similarity (replace $1 with a real 768-dim query embedding)
-SELECT p.title,1-(c.embedding <=> $1::vector) cosine_similarity FROM paper_chunks c JOIN papers p USING(paper_id) WHERE c.embedding IS NOT NULL ORDER BY c.embedding <=> $1::vector LIMIT 10;
+-- Run these queries after initializing db/scholarhub_schema.sql.
+
+-- 1. JOIN: submissions with their primary authors and venues
+SELECT p.paper_id,p.title,p.status,u.name AS author,v.name AS venue
+FROM papers p JOIN users u ON u.user_id=p.primary_author_id
+LEFT JOIN venues v ON v.venue_id=p.venue_id ORDER BY p.submitted_at DESC;
+
+-- 2. GROUP BY + HAVING: reviewer workload
+SELECT u.name,COUNT(*) AS pending_assignments
+FROM users u JOIN review_assignments ra ON ra.reviewer_id=u.user_id
+WHERE u.role='REVIEWER' AND ra.status='PENDING'
+GROUP BY u.user_id,u.name HAVING COUNT(*) >= 1;
+
+-- 3. Stored function: average score for a paper
+SELECT avg_review_score(1);
+
+-- 4. Full-text search using the GIN index
+SELECT paper_id,title FROM papers
+WHERE search_vector @@ plainto_tsquery('english','machine learning');
+
+-- 5. Audit log created by the status trigger
+SELECT * FROM audit_log ORDER BY changed_at DESC;
+
+-- 6. Reviewer workload view
+SELECT * FROM reviewer_workload;
+
+-- 7. Vector similarity (replace the example vector with a real 384-dimension embedding)
+-- SELECT p.title,1-(e.embedding <=> '[...]'::vector) AS cosine_similarity
+-- FROM paper_embeddings e JOIN papers p ON p.paper_id=e.paper_id
+-- ORDER BY e.embedding <=> '[...]'::vector LIMIT 5;

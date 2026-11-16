@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {database} from "@/lib/db";import {currentSession} from "@/lib/auth";
+export async function GET(){const s=await currentSession();if(!s||s.role!=="ADMIN")return NextResponse.json({error:"Admin access required."},{status:403});const db=database();if(!db)return NextResponse.json({error:"Database unavailable."},{status:503});const {rows}=await db.query("SELECT user_id,name,email,role,department FROM users WHERE is_active=TRUE ORDER BY role,name");return NextResponse.json({users:rows});}
