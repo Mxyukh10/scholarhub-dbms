@@ -2,7 +2,7 @@ import {NextRequest,NextResponse} from "next/server";
 import {database} from "@/lib/db"; import {currentSession} from "@/lib/auth";
 export async function GET(){
  const db=database(); if(!db)return NextResponse.json({error:"Database is not configured."},{status:503});
- try {const {rows}=await db.query(`SELECT p.paper_id,p.title,p.abstract,p.status,p.submitted_at,u.name AS author,v.name AS venue,
+ try {const {rows}=await db.query(`SELECT p.paper_id,p.title,p.abstract,p.status,p.submitted_at,u.name AS author,v.name AS venue,NULLIF(avg_review_score(p.paper_id),0) AS average_score,
  COALESCE(array_agg(DISTINCT k.keyword_text) FILTER(WHERE k.keyword_text IS NOT NULL),'{}') AS keywords,
  (SELECT COUNT(*) FROM review_assignments ra WHERE ra.paper_id=p.paper_id) AS reviewer_count,
  (SELECT COUNT(*) FROM reviews r JOIN review_assignments ra ON ra.assignment_id=r.assignment_id WHERE ra.paper_id=p.paper_id) AS completed_reviews

@@ -101,3 +101,12 @@ SELECT * FROM audit_log ORDER BY changed_at DESC;
 - The application currently provides PostgreSQL full-text search. True semantic search needs a configured embedding generator that creates 384-dimensional vectors with the same model used for query embeddings. The database extension/table/index are ready, but no embedding API or model is bundled.
 - Demo user names and venue labels are sample records. Replace them with your team's actual users and verified academic examples before final submission.
 - `db/01_schema.sql`, `db/02_advanced.sql` and `db/04_seed.sql` are compatibility pointers kept to prevent accidentally running the earlier prototype schema. Use only `db/scholarhub_schema.sql` to initialize ScholarHub; `db/03_queries.sql` contains optional demonstration queries.
+
+
+## Latest viva-requested updates
+
+- Average review score is returned by the paper and assignment APIs and displayed beside paper status for Admin, Author and Reviewer views.
+- Admins can delete any paper from the repository. The API enforces the Admin role; related rows are cleaned up by the schema's `ON DELETE CASCADE` relationships.
+- Reviewer assignment is limited to three active papers per reviewer. The assignment API uses a nested SQL query to count active distinct papers, locks the reviewer row to protect concurrent assignment attempts, and returns `REVIEWER_LIMIT_REACHED` so the UI can show an alert. A paper is considered active for this limit while its assignment is `PENDING` and its paper status is `SUBMITTED` or `UNDER_REVIEW`.
+
+After updating an existing database, restart the app; no schema migration is required for these changes. The new assignment limit is enforced by the API.
